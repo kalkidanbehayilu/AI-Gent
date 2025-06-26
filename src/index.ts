@@ -12,7 +12,13 @@ export {
   Tool,
   AIGentError,
   LLMError,
-  ConfigurationError
+  ConfigurationError,
+  // Real-time types
+  StreamingResponse,
+  RealtimeEventType,
+  RealtimeEvent,
+  WebSocketMessage,
+  RealtimeError
 } from './types';
 
 // Provider exports
@@ -25,4 +31,7 @@ export { LlamaProvider } from './providers/llama';
 export type { LLMProviderConfig, LLMRequestOptions } from './providers/base';
 
 // Utility functions
-export { AgentConfigSchema, MessageSchema } from './types'; 
+export { AgentConfigSchema, MessageSchema } from './types';
+
+// Tools exports
+export { defaultTools } from './tools'; 

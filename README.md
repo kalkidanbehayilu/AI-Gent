@@ -11,6 +11,8 @@ A powerful Node.js package for creating AI agents using various LLM providers. B
 - 📝 **TypeScript Support**: Full TypeScript support with comprehensive type definitions
 - 🎯 **Flexible Configuration**: Highly configurable agents with various options
 - 🧪 **Built-in Tools**: HTTP requests, file operations, calculations, and more
+- ⚡ **Real-time Streaming**: Support for streaming responses and real-time updates
+- 🔄 **Event-driven Architecture**: Built-in event system for real-time communication
 
 ## Installation
 
@@ -104,8 +106,146 @@ const agentConfig: AgentConfig = {
   memory: {
     enabled: true,
     maxMessages: 10
+  },
+  streaming: {
+    enabled: true,
+    chunkSize: 50
   }
 };
+```
+
+## Real-time and Streaming
+
+AI-Gent supports real-time communication and streaming responses:
+
+### Event-driven Real-time Agent
+
+```typescript
+import { Agent, LLMProvider } from 'ai-gent';
+import { EventEmitter } from 'events';
+
+// Create a real-time wrapper
+class RealtimeAgent extends EventEmitter {
+  constructor(private agent: Agent) {
+    super();
+  }
+
+  async sendMessage(content: string) {
+    this.emit('message_sent', { content, timestamp: Date.now() });
+    
+    const response = await this.agent.sendMessage(content);
+    
+    this.emit('message_received', { 
+      content: response.content, 
+      timestamp: Date.now() 
+    });
+    
+    return response;
+  }
+
+  async *sendMessageStream(content: string) {
+    this.emit('message_sent', { content, timestamp: Date.now() });
+    
+    const response = await this.agent.sendMessage(content);
+    const chunks = this.chunkString(response.content, 50);
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const isComplete = i === chunks.length - 1;
+      
+      this.emit('stream_chunk', { 
+        content: chunk, 
+        isComplete, 
+        timestamp: Date.now() 
+      });
+      
+      yield { content: chunk, isComplete };
+      
+      if (!isComplete) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+    
+    this.emit('stream_complete', { 
+      content: response.content, 
+      timestamp: Date.now() 
+    });
+  }
+
+  private chunkString(str: string, size: number): string[] {
+    const chunks: string[] = [];
+    for (let i = 0; i < str.length; i += size) {
+      chunks.push(str.slice(i, i + size));
+    }
+    return chunks;
+  }
+}
+
+// Usage
+const agent = new Agent(agentConfig, providerConfig);
+const realtimeAgent = new RealtimeAgent(agent);
+
+// Set up event listeners
+realtimeAgent.on('message_sent', (data) => {
+  console.log('📤 Message sent:', data);
+});
+
+realtimeAgent.on('message_received', (data) => {
+  console.log('📥 Message received:', data);
+});
+
+realtimeAgent.on('stream_chunk', (data) => {
+  process.stdout.write(data.content); // Print chunks as they arrive
+});
+
+// Send streaming message
+for await (const chunk of realtimeAgent.sendMessageStream('Tell me a story.')) {
+  // Handle streaming chunks
+}
+```
+
+### WebSocket Integration
+
+For full WebSocket support, you can integrate with Socket.IO:
+
+```typescript
+import { Server } from 'socket.io';
+import { Agent, LLMProvider } from 'ai-gent';
+
+const io = new Server(server);
+
+io.on('connection', (socket) => {
+  // Create agent for this connection
+  const agent = new Agent(agentConfig, providerConfig);
+  
+  socket.on('send_message', async (data) => {
+    try {
+      const response = await agent.sendMessage(data.content);
+      socket.emit('message_response', {
+        content: response.content,
+        usage: response.usage
+      });
+    } catch (error) {
+      socket.emit('error', { message: error.message });
+    }
+  });
+  
+  socket.on('stream_message', async (data) => {
+    try {
+      const response = await agent.sendMessage(data.content);
+      const chunks = chunkString(response.content, 50);
+      
+      for (const chunk of chunks) {
+        socket.emit('stream_chunk', { content: chunk });
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      socket.emit('stream_complete', { usage: response.usage });
+    } catch (error) {
+      socket.emit('error', { message: error.message });
+    }
+  });
+});
 ```
 
 ## Using Tools
@@ -230,7 +370,7 @@ const config = {
 ## Error Handling
 
 ```typescript
-import { AIGentError, LLMError, ConfigurationError } from 'ai-gent';
+import { AIGentError, LLMError, ConfigurationError, RealtimeError } from 'ai-gent';
 
 try {
   const response = await agent.sendMessage('Hello');
@@ -239,6 +379,8 @@ try {
     console.error('LLM Error:', error.message);
   } else if (error instanceof ConfigurationError) {
     console.error('Configuration Error:', error.message);
+  } else if (error instanceof RealtimeError) {
+    console.error('Real-time Error:', error.message);
   } else {
     console.error('Unknown Error:', error);
   }
@@ -261,6 +403,7 @@ Check out the `examples/` directory for complete working examples:
 
 - `basic-agent.ts` - Simple agent usage
 - `agent-with-tools.ts` - Agent with tools and functions
+- `realtime-example.ts` - Real-time agent with streaming
 
 ## API Reference
 
@@ -288,6 +431,8 @@ new Agent(config: AgentConfig, providerConfig: LLMProviderConfig)
 - `LLMProviderConfig` - Provider configuration
 - `Message` - Conversation message
 - `LLMResponse` - LLM response
+- `StreamingResponse` - Streaming response
+- `RealtimeEventType` - Real-time event types
 - `FunctionDefinition` - Function definition
 - `Tool` - Tool definition
 
@@ -306,5 +451,5 @@ MIT License - see LICENSE file for details.
 ## Support
 
 - 📧 Email: support@ai-gent.com
-- 🐛 Issues: [GitHub Issues](https://github.com/your-username/ai-gent/issues)
-- 📖 Documentation: [GitHub Wiki](https://github.com/your-username/ai-gent/wiki) 
+- 🐛 Issues: [GitHub Issues](https://github.com/kalkidanbehayilu/ai-gent/issues)
+- 📖 Documentation: [GitHub Wiki](https://github.com/kalkidanbehayilu/ai-gent/wiki) 
